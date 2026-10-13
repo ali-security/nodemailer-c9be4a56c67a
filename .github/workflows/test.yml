@@ -1,11 +1,16 @@
 name: Run tests
 
 on:
-    push:
-    pull_request:
+    workflow_dispatch:
+        inputs:
+            test-filter:
+                description: 'Optional node --test name pattern; empty runs the full suite'
+                required: false
+                default: ''
 
 jobs:
     test:
+        timeout-minutes: 30
         strategy:
             matrix:
                 node: [18.x, 20.x]
@@ -18,5 +23,18 @@ jobs:
               with:
                   node-version: ${{ matrix.node }}
             - run: npm install
-            - run: npm run lint
-            - run: npm run test:coverage
+            - run: |
+                  if [ -n "${{ inputs.test-filter }}" ]; then
+                      npx c8 node --test --test-concurrency=1 --test-name-pattern="${{ inputs.test-filter }}" test/**/*.test.js test/**/*-test.js
+                  else
+                      npm run test:coverage
+                  fi
+            - name: Pack
+              if: matrix.node == '18.x'
+              run: npm pack
+            - uses: actions/upload-artifact@v4
+              if: matrix.node == '18.x'
+              with:
+                  name: nodemailer-tgz
+                  path: nodemailer-*.tgz
+                  if-no-files-found: error
